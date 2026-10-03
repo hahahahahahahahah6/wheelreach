@@ -6,11 +6,13 @@
 
 **Apple published a wheel your Python can't install — and their own source says it should work.**
 
-Real case, still live: [`coreai-models==0.1.0`](https://github.com/apple/coreai-models/issues/96).
+Real case, still reproducible today: [`coreai-models==0.1.0`](https://github.com/apple/coreai-models/issues/96).
 The wheel on PyPI declares `Requires-Python: >=3.14`, but the repo's
 `python/pyproject.toml` says `requires-python = ">=3.11"` and `.python-version`
 pins 3.11. Anyone on Python 3.11 or 3.12 gets a resolution failure for a
-package the source claims to support. (Verified against the live PyPI JSON API.)
+package the source claims to support. (The upstream issue was closed
+2026-07-16, but PyPI artifacts are immutable — the published 0.1.0 wheel and
+sdist still declare `>=3.14`, verified against the live PyPI JSON API.)
 
 A second flavor of the same disease:
 [pytorch/pytorch#186099](https://github.com/pytorch/pytorch/issues/186099) —
@@ -32,36 +34,46 @@ the release?), wheelreach (can your Python actually install it?).
 
 ```bash
 pip install wheelreach
-wheelreach check --package coreai-models
+wheelreach check --package coreai-models --expected-python ">=3.11"
 ```
 
 ```
 version  python  verdict                     wheel
 -------  ------  --------------------------  ------------------------------------
-0.1.0    3.10    BLOCKED_BY_REQUIRES_PYTHON  coreai_models-0.1.0-py3-none-any.whl
+0.1.0    3.10    OUT_OF_SCOPE                -
 0.1.0    3.11    BLOCKED_BY_REQUIRES_PYTHON  coreai_models-0.1.0-py3-none-any.whl
 0.1.0    3.12    BLOCKED_BY_REQUIRES_PYTHON  coreai_models-0.1.0-py3-none-any.whl
 0.1.0    3.13    BLOCKED_BY_REQUIRES_PYTHON  coreai_models-0.1.0-py3-none-any.whl
-0.1.0    3.14    INSTALLABLE                 coreai_models-0.1.0-py3-none-any.whl
+0.1.0    3.14    WHEEL_ELIGIBLE              coreai_models-0.1.0-py3-none-any.whl
 
-checked 5 version/python pairs, 4 problem(s): 0.1.0 on 3.10 (BLOCKED_BY_REQUIRES_PYTHON), ...
+checked 5 version/python pairs, 3 problem(s): 0.1.0 on 3.11 (BLOCKED_BY_REQUIRES_PYTHON), ...
   0.1.0 / 3.11: wheel coreai_models-0.1.0-py3-none-any.whl exists for cp311 but Requires-Python '>=3.14' excludes Python 3.11
 ```
+
+`--expected-python` declares which Pythons the project *intends* to support
+(here, from the repo's own `pyproject.toml`). Without it, a blocked wheel is
+reported as "excluded by metadata"; with it, targets outside the declared
+range are `OUT_OF_SCOPE` instead of problems — a 3.10 exclusion isn't a bug
+when the project only promises 3.11+.
 
 Exit codes: `0` clean, `1` problems found, `2` errors (fetch failures, bad args).
 
 ## Verdicts
 
-| Verdict | Meaning |
-|---|---|
-| `INSTALLABLE` | a compatible wheel exists and metadata allows this Python |
-| `BLOCKED_BY_REQUIRES_PYTHON` | a wheel exists for this Python but `Requires-Python` excludes it |
-| `NO_WHEEL` | no compatible wheel and no sdist published |
-| `NO_WHEEL_HAS_SDIST` | no compatible wheel, but an sdist exists that might build |
+| Verdict | Meaning | Problem? |
+|---|---|---|
+| `WHEEL_ELIGIBLE` | a compatible wheel exists and metadata allows this Python | no |
+| `BLOCKED_BY_REQUIRES_PYTHON` | a wheel exists for this Python but `Requires-Python` excludes it | yes |
+| `NO_WHEEL` | no compatible wheel and no sdist published | yes |
+| `NO_WHEEL_HAS_SDIST` | no compatible wheel, but an sdist exists that might build | no (informational — pip can build it) |
+| `UNKNOWN_METADATA` | `Requires-Python` could not be parsed; the check was impossible | yes |
+| `OUT_OF_SCOPE` | outside `--expected-python`; a block here is not a bug | no |
 
 The `NO_WHEEL` / `NO_WHEEL_HAS_SDIST` split is deliberate: "no wheel" and
 "nothing installable at all" are different severities, and a checker that
-conflates them cries wolf on every sdist-only package.
+treats sdist-only packages as failures cries wolf. Likewise `UNKNOWN_METADATA`
+is a problem rather than a silent pass — "could not verify" must never look
+like "it's fine."
 
 Options:
 
@@ -70,6 +82,7 @@ wheelreach check --package <name> --version 1.2.3   # one version (default: late
 wheelreach check --package <name> --all             # every published version
 wheelreach check --package <name> --python 3.11     # single target Python
 wheelreach check --package <name> --python-set 3.11,3.12
+wheelreach check --package <name> --expected-python ">=3.11"  # scope BLOCKED verdicts
 wheelreach check --package <name> --format json
 ```
 
@@ -78,6 +91,7 @@ Config file (`pyproject.toml`):
 ```toml
 [tool.wheelreach]
 python_set = "3.11,3.12"
+expected_python = ">=3.11"
 ignore = ["2.0a1"]
 ```
 
@@ -88,4 +102,4 @@ shape. macOS, Windows, ARM, and alternative interpreters are out of scope for
 v0.1.0. Wheel-tag compatibility is syntactic (filename tags + metadata), not a
 trial install: a passing check means pip *should* accept the file, not that the
 code runs. `Requires-Python` clauses beyond `==/!=/>=/<=/>/</~=` (with optional
-`.*` wildcards) raise an error rather than guessing.
+`.*` wildcards) are reported as `UNKNOWN_METADATA` rather than guessed.
