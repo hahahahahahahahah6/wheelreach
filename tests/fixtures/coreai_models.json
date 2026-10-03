@@ -1,0 +1,23 @@
+{
+  "info": {
+    "name": "coreai-models",
+    "version": "0.1.0",
+    "requires_python": ">=3.14"
+  },
+  "releases": {
+    "0.1.0": [
+      {
+        "packagetype": "bdist_wheel",
+        "filename": "coreai_models-0.1.0-py3-none-any.whl",
+        "url": "https://files.pythonhosted.org/packages/42/ed/f906fc0068962733a2232e7978b0c3951156eae9dc3eb18a8e9d5a230eae/coreai_models-0.1.0-py3-none-any.whl",
+        "requires_python": ">=3.14"
+      },
+      {
+        "packagetype": "sdist",
+        "filename": "coreai_models-0.1.0.tar.gz",
+        "url": "https://files.pythonhosted.org/packages/51/a5/b3e11672f263f35c39c50d03a66c6e574fca9a17623338d5d78a0dce6c89/coreai_models-0.1.0.tar.gz",
+        "requires_python": ">=3.14"
+      }
+    ]
+  }
+}
