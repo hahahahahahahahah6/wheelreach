@@ -55,11 +55,31 @@ def test_exit_2_on_bad_python(monkeypatch, tmp_path):
     assert main(base_args(monkeypatch, tmp_path) + ["--python", "banana"]) == 2
 
 
+def test_bad_expected_python_is_exit_2(monkeypatch, tmp_path, capsys):
+    patch_pypi(monkeypatch, CLEAN_INFO)
+    assert main(base_args(monkeypatch, tmp_path) + ["--expected-python", "garbage"]) == 2
+    assert "expected-python" in capsys.readouterr().err
+
+
+def test_expected_python_scopes_cli(monkeypatch, tmp_path, capsys):
+    info = {"versions": ["1.0"],
+            "releases": {"1.0": {"requires_python": ">=3.14",
+                                 "wheels": ["p-1-py3-none-any.whl"],
+                                 "has_sdist": False}}}
+    patch_pypi(monkeypatch, info)
+    args = base_args(monkeypatch, tmp_path) + ["--python-set", "3.10,3.11",
+                                               "--expected-python", ">=3.11"]
+    assert main(args) == 1
+    out = capsys.readouterr().out
+    assert "OUT_OF_SCOPE" in out
+    assert "BLOCKED_BY_REQUIRES_PYTHON" in out
+
+
 def test_json_format_shape(monkeypatch, tmp_path, capsys):
     patch_pypi(monkeypatch, CLEAN_INFO)
     assert main(base_args(monkeypatch, tmp_path) + ["--python", "3.11", "--format", "json"]) == 0
     rows = json.loads(capsys.readouterr().out)
-    assert rows[0]["verdict"] == "INSTALLABLE"
+    assert rows[0]["verdict"] == "WHEEL_ELIGIBLE"
     assert rows[0]["python"] == "3.11"
 
 
