@@ -15,8 +15,8 @@ def find_default_config() -> str | None:
 
 
 def load_config_file(path: str) -> dict:
-    """Return {'python_set': str|None, 'ignore': [...]} from [tool.wheelreach]."""
-    cfg: dict = {"python_set": None, "ignore": []}
+    """Return {'python_set': str|None, 'ignore': [...], 'expected_python': str|None}."""
+    cfg: dict = {"python_set": None, "ignore": [], "expected_python": None}
     if tomllib is None:
         return cfg
     try:
@@ -30,11 +30,15 @@ def load_config_file(path: str) -> dict:
             cfg["python_set"] = tool["python_set"]
         if isinstance(tool.get("ignore"), list):
             cfg["ignore"] = [str(v) for v in tool["ignore"]]
+        if isinstance(tool.get("expected_python"), str):
+            cfg["expected_python"] = tool["expected_python"]
     return cfg
 
 
-def merge_config(file_config: dict, cli_python_set: str | None, cli_ignore: list) -> dict:
+def merge_config(file_config: dict, cli_python_set: str | None, cli_ignore: list,
+                 cli_expected_python: str | None = None) -> dict:
     return {
         "python_set": cli_python_set or file_config.get("python_set"),
         "ignore": list(cli_ignore) + list(file_config.get("ignore") or []),
+        "expected_python": cli_expected_python or file_config.get("expected_python"),
     }
