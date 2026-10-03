@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wheelreach"
+version = "0.1.0"
+description = "Check that a package's declared Python support actually has installable release files"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Hao Li" }]
+keywords = ["pypi", "packaging", "release", "python", "audit", "supply-chain"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Software Distribution",
+]
+
+[project.scripts]
+wheelreach = "wheelreach.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/hahahahahahahahah6/wheelreach"
+
+[tool.setuptools.packages.find]
+where = ["src"]
