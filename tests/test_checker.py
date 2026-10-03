@@ -13,9 +13,11 @@ import os
 from wheelreach.checker import (
     BLOCKED_BY_REQUIRES_PYTHON,
     IGNORED,
-    INSTALLABLE,
+    WHEEL_ELIGIBLE,
     NO_WHEEL,
     NO_WHEEL_HAS_SDIST,
+    OUT_OF_SCOPE,
+    UNKNOWN_METADATA,
     check_package,
     check_version,
     has_problems,
@@ -39,7 +41,7 @@ def test_coreai_models_blocked_on_311_and_312():
     assert by_py[(3, 11)].verdict == BLOCKED_BY_REQUIRES_PYTHON
     assert by_py[(3, 12)].verdict == BLOCKED_BY_REQUIRES_PYTHON
     assert by_py[(3, 13)].verdict == BLOCKED_BY_REQUIRES_PYTHON
-    assert by_py[(3, 14)].verdict == INSTALLABLE
+    assert by_py[(3, 14)].verdict == WHEEL_ELIGIBLE
     assert has_problems(results)
 
 
@@ -60,15 +62,16 @@ def test_installable_when_wheel_and_metadata_agree():
         "has_sdist": True,
     }
     results = check_version("2.0", release, [(3, 10), (3, 14)])
-    assert all(c.verdict == INSTALLABLE for c in results)
+    assert all(c.verdict == WHEEL_ELIGIBLE for c in results)
     assert not has_problems(results)
 
 
-def test_no_wheel_but_sdist_is_distinct():
+def test_no_wheel_but_sdist_is_distinct_and_not_a_problem():
     release = {"requires_python": ">=3.9", "wheels": [], "has_sdist": True}
     (c,) = check_version("1.0", release, [(3, 11)])
     assert c.verdict == NO_WHEEL_HAS_SDIST
-    assert has_problems([c])
+    # pip can build from the sdist: informational, not a failure (no wolf-crying)
+    assert not has_problems([c])
 
 
 def test_no_wheel_no_sdist():
@@ -87,14 +90,34 @@ def test_wrong_platform_wheel_counts_as_no_wheel():
     assert c.verdict == NO_WHEEL
 
 
-def test_unparseable_requires_python_does_not_invent_failure():
+def test_unparseable_requires_python_is_unknown_not_pass():
     release = {
         "requires_python": "garbage-spec",
         "wheels": ["pkg-1.0-py3-none-any.whl"],
         "has_sdist": False,
     }
     (c,) = check_version("1.0", release, [(3, 11)])
-    assert c.verdict == INSTALLABLE
+    assert c.verdict == UNKNOWN_METADATA
+    assert "garbage-spec" in c.detail
+    # could not verify: a problem, never a pass
+    assert has_problems([c])
+
+
+def test_expected_python_scopes_blocked_verdicts():
+    # Source declares >=3.11 (the Apple case): 3.10 blocked is not a bug.
+    release = {
+        "requires_python": ">=3.14",
+        "wheels": ["pkg-1.0-py3-none-any.whl"],
+        "has_sdist": False,
+    }
+    results = check_version("1.0", release, [(3, 10), (3, 11)], expected_python=">=3.11")
+    by_py = {(c.python[0], c.python[1]): c for c in results}
+    assert by_py[(3, 10)].verdict == OUT_OF_SCOPE
+    assert by_py[(3, 11)].verdict == BLOCKED_BY_REQUIRES_PYTHON
+    assert has_problems(results)
+    # without expected_python, 3.10 blocked still counts (signal, not scoped)
+    (c10,) = check_version("1.0", release, [(3, 10)])
+    assert c10.verdict == BLOCKED_BY_REQUIRES_PYTHON
 
 
 def test_ignore_skips_version():
