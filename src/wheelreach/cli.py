@@ -16,6 +16,7 @@ from .checker import (
 from .config import find_default_config, load_config_file, merge_config
 from .http import FetchError
 from .pypi import fetch_pypi_info, latest_version
+from .specifier import allows
 from .versions import parse_python_set
 
 
@@ -39,6 +40,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="check a single Python version (default: 3.10-3.14)")
     c.add_argument("--python-set", default=None, metavar="3.10,3.11",
                    help="comma-separated target Pythons (overrides config)")
+    c.add_argument("--expected-python", default=None, metavar=">=3.11",
+                   help="Requires-Python specifier the project intends to support; "
+                   "target Pythons outside it are OUT_OF_SCOPE, not problems")
     c.add_argument("--ignore", action="append", default=[], metavar="VERSION",
                    help="skip a version (repeatable)")
     c.add_argument("--config", default=None,
@@ -100,15 +104,23 @@ def cmd_check(args: argparse.Namespace) -> int:
         if args.python:
             pythons = parse_python_set(args.python)
             ignore = args.ignore
+            expected_python = args.expected_python
         else:
             config_path = args.config or find_default_config()
-            file_config = load_config_file(config_path) if config_path else {"python_set": None, "ignore": []}
-            config = merge_config(file_config, args.python_set, args.ignore)
+            file_config = load_config_file(config_path) if config_path else {"python_set": None, "ignore": [], "expected_python": None}
+            config = merge_config(file_config, args.python_set, args.ignore, args.expected_python)
             pythons = parse_python_set(config["python_set"]) if config["python_set"] else list(DEFAULT_PYTHON_SET)
             ignore = config["ignore"]
+            expected_python = config["expected_python"]
     except ValueError as exc:
         print(f"wheelreach: error: {exc}", file=sys.stderr)
         return 2
+    if expected_python is not None:
+        try:
+            allows(expected_python, 3, 11)  # probe-parse; version is arbitrary
+        except ValueError as exc:
+            print(f"wheelreach: error: bad --expected-python: {exc}", file=sys.stderr)
+            return 2
 
     try:
         info = fetch_pypi_info(args.package)
@@ -131,6 +143,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         ignore=ignore,
         only=None if args.all else only,
         limit=args.limit if args.all else None,
+        expected_python=expected_python,
     )
 
     if args.format == "json":
